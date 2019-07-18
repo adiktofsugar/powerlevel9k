@@ -1624,20 +1624,6 @@ __git_branch_name=
 git_branch() {
   local head_contents="$(cat "$__git_repo_path/HEAD")"
   __git_branch_name=${head_contents#ref: refs/heads/}
-  if [[ -n "$POWERLEVEL9K_VCS_SHORTEN_LENGTH" ]] && [[ -n "$POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH" ]]; then
-    set_default POWERLEVEL9K_VCS_SHORTEN_DELIMITER $'\U2026'
-
-    if [ ${#__git_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ] && [ ${#__git_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]; then
-      case "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" in
-        truncate_middle)
-          __git_branch_name="${__git_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${__git_branch_name: -$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
-        ;;
-        truncate_from_right)
-          __git_branch_name="${__git_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}"
-        ;;
-      esac
-    fi
-  fi
 }
 
 __git_ahead=
@@ -1708,9 +1694,25 @@ prompt_vcs_light() {
     git_aheadbehind
     git_remotebranch
     local -a vcs_prompt
-    vcs_prompt+=("$(print_icon 'VCS_BRANCH_ICON')${__git_branch_name}")
+    local short_branch_name="$__git_branch_name"
+    
+    if [[ -n "$POWERLEVEL9K_VCS_SHORTEN_LENGTH" ]] && [[ -n "$POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH" ]]; then
+      set_default POWERLEVEL9K_VCS_SHORTEN_DELIMITER $'\U2026'
+
+      if [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ] && [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]; then
+        case "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" in
+          truncate_middle)
+            short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${short_branch_name: -$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
+          ;;
+          truncate_from_right)
+            short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}"
+          ;;
+        esac
+      fi
+    fi
+    vcs_prompt+=("$(print_icon 'VCS_BRANCH_ICON')${short_branch_name}")
     if [[ -n ${__git_remote_branch_name} ]] && [[ "${__git_remote_branch_name#*/}" != "${__git_branch_name}" ]] ; then
-        vcs_prompt+="$(print_icon 'VCS_REMOTE_BRANCH_ICON')${__git_remote_branch_name// /}"
+        vcs_prompt+=(" $(print_icon 'VCS_REMOTE_BRANCH_ICON')${__git_remote_branch_name// /}")
     fi
     (( __git_ahead )) && vcs_prompt+=( " $(print_icon 'VCS_OUTGOING_CHANGES_ICON')${__git_ahead// /}" )
     (( __git_behind )) && vcs_prompt+=( " $(print_icon 'VCS_INCOMING_CHANGES_ICON')${__git_behind// /}" )
