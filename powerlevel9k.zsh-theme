@@ -1620,20 +1620,56 @@ git_find_repo_path () {
   fi
 }
 
+__git_branch_name=
+git_branch() {
+  local head_contents="$(cat "$__git_repo_path/HEAD")"
+  __git_branch_name=${head_contents#ref: refs/heads/}
+  if [[ -n "$POWERLEVEL9K_VCS_SHORTEN_LENGTH" ]] && [[ -n "$POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH" ]]; then
+    set_default POWERLEVEL9K_VCS_SHORTEN_DELIMITER $'\U2026'
+
+    if [ ${#__git_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ] && [ ${#__git_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]; then
+      case "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" in
+        truncate_middle)
+          __git_branch_name="${__git_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${__git_branch_name: -$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
+        ;;
+        truncate_from_right)
+          __git_branch_name="${__git_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}"
+        ;;
+      esac
+    fi
+  fi
+}
+
+__git_ahead=
+__git_behind=
+git_aheadbehind() {
+    __git_ahead=$(command git rev-list --count "${__git_branch_name}"@{upstream}..HEAD 2>/dev/null)
+    __git_behind=$(command git rev-list --count HEAD.."${__git_branch_name}"@{upstream} 2>/dev/null)
+}
+
+__git_remote_branch_name=
+git_remotebranch() {
+    __git_remote_branch_name=${$(command git rev-parse --verify HEAD@{upstream} --symbolic-full-name 2>/dev/null)/refs\/(remotes|heads)\/}
+}
+
 ################################################################
 # Segment to show VCS information
 prompt_vcs() {
   local current_dir=$PWD
   local dir
   local use_light=
-  current_dir="${current_dir/#$HOME/~}"
-  for dir in ${POWERLEVEL9K_VCS_LIGHT_DIRS:-()}; do
-    dir="${dir/#$HOME/~}"
-    if [[ $current_dir == $dir ]] || [[ $current_dir == $dir* ]]; then
-      use_light=true
-      break
-    fi
-  done
+  if [[ $POWERLEVEL9K_VCS_LIGHT_DIRS = true ]]; then
+    use_light=true
+  else
+    current_dir="${current_dir/#$HOME/~}"
+    for dir in ${POWERLEVEL9K_VCS_LIGHT_DIRS:-()}; do
+      dir="${dir/#$HOME/~}"
+      if [[ $current_dir == $dir ]] || [[ $current_dir == $dir* ]]; then
+        use_light=true
+        break
+      fi
+    done
+  fi
   if [[ $use_light ]]; then
     prompt_vcs_light "$@"
   else
@@ -1668,10 +1704,19 @@ prompt_vcs_heavy() {
 prompt_vcs_light() {
   git_find_repo_path
   if [[ "$__git_repo_path" ]]; then
-    local branch_name="$(cat "$__git_repo_path/HEAD")"
-    local vcs_prompt="${branch_name#ref: refs/heads/}"
+    git_branch
+    git_aheadbehind
+    git_remotebranch
+    local -a vcs_prompt
+    vcs_prompt+=("$(print_icon 'VCS_BRANCH_ICON')${__git_branch_name}")
+    if [[ -n ${__git_remote_branch_name} ]] && [[ "${__git_remote_branch_name#*/}" != "${__git_branch_name}" ]] ; then
+        vcs_prompt+="$(print_icon 'VCS_REMOTE_BRANCH_ICON')${__git_remote_branch_name// /}"
+    fi
+    (( __git_ahead )) && vcs_prompt+=( " $(print_icon 'VCS_OUTGOING_CHANGES_ICON')${__git_ahead// /}" )
+    (( __git_behind )) && vcs_prompt+=( " $(print_icon 'VCS_INCOMING_CHANGES_ICON')${__git_behind// /}" )
+
     # pretend it's always clean since we can't possibly know
-    "$1_prompt_segment" "prompt_vcs_CLEAN" "$2" "blue" "$DEFAULT_COLOR" "$vcs_prompt" "$vcs_visual_identifier"
+    "$1_prompt_segment" "prompt_vcs_CLEAN" "$2" "blue" "$DEFAULT_COLOR" "${(j::)vcs_prompt}" "$vcs_visual_identifier"
   fi
 }
 
