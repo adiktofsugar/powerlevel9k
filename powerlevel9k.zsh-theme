@@ -17,9 +17,9 @@
 ################################################################
 
 ## Turn on for Debugging
-#PS4='%s%f%b%k%F{blue}%{λ%}%L %F{240}%N:%i%(?.. %F{red}%?) %1(_.%F{yellow}%-1_ .)%s%f%b%k '
-#zstyle ':vcs_info:*+*:*' debug true
-#set -o xtrace
+# PS4='%s%f%b%k%F{blue}%{λ%}%L %F{240}%N:%i%(?.. %F{red}%?) %1(_.%F{yellow}%-1_ .)%s%f%b%k '
+# zstyle ':vcs_info:*+*:*' debug true
+# set -o xtrace
 
 # Try to set the installation path
 if [[ -n "$POWERLEVEL9K_INSTALLATION_DIR" ]]; then
@@ -971,6 +971,19 @@ prompt_dir() {
     current_state="HOME_SUBFOLDER"
   fi
 
+  local custom_dir_name
+  local custom_dir_path
+  if [[ -n $POWERLEVEL9K_DIR_CUSTOM_PATHS ]]; then
+    for custom_dir_name custom_dir_path in ${(kv)POWERLEVEL9K_DIR_CUSTOM_PATHS}; do
+      if [[ $state_path == $custom_dir_path ]]; then
+        current_state=$custom_dir_name
+      elif [[ $state_path == ${custom_dir_path}/* ]]; then
+        current_state=$custom_dir_name
+      fi
+      dir_states[$custom_dir_name]="${custom_dir_name}_ICON"
+    done
+  fi
+
   # declare variables used for bold and state colors
   local bld_on bld_off dir_state_foreground dir_state_user_foreground
   # test if user wants the last directory printed in bold
@@ -1040,6 +1053,14 @@ prompt_dir() {
     current_path=${current_path:s/~/$POWERLEVEL9K_HOME_FOLDER_ABBREVIATION}
   fi
 
+  if [[ -n $POWERLEVEL9K_DIR_CUSTOM_PATHS ]]; then
+    for custom_dir_name custom_dir_path in ${(kv)POWERLEVEL9K_DIR_CUSTOM_PATHS}; do
+      if [[ $current_state = $custom_dir_name ]]; then
+        current_path=".${current_path#$custom_dir_path}"
+      fi
+    done
+  fi
+  
   "$1_prompt_segment" "$0_${current_state}" "$2" "blue" "$DEFAULT_COLOR" "${current_path}" "${dir_states[$current_state]}"
 }
 
@@ -1582,9 +1603,45 @@ powerlevel9k_vcs_init() {
   fi
 }
 
+__git_repo_path=
+git_find_repo_path () {
+  if [ -n "$__git_repo_path" ]; then
+    # we already know where it is
+    return
+  fi
+
+  if [ -n "${GIT_DIR-}" ]; then
+    test -d "${GIT_DIR-}" &&
+    __git_repo_path="$GIT_DIR"
+  elif [ -d .git ]; then
+    __git_repo_path=.git
+  else
+    __git_repo_path="$(git rev-parse --git-dir 2>/dev/null)"
+  fi
+}
+
 ################################################################
 # Segment to show VCS information
 prompt_vcs() {
+  local current_dir=$PWD
+  local dir
+  local use_light=
+  current_dir="${current_dir/#$HOME/~}"
+  for dir in ${POWERLEVEL9K_VCS_LIGHT_DIRS:-()}; do
+    dir="${dir/#$HOME/~}"
+    if [[ $current_dir == $dir ]] || [[ $current_dir == $dir* ]]; then
+      use_light=true
+      break
+    fi
+  done
+  if [[ $use_light ]]; then
+    prompt_vcs_light "$@"
+  else
+    prompt_vcs_heavy "$@"
+  fi
+}
+
+prompt_vcs_heavy() {
   VCS_WORKDIR_DIRTY=false
   VCS_WORKDIR_HALF_DIRTY=false
   local current_state=""
@@ -1605,7 +1662,16 @@ prompt_vcs() {
         current_state='clean'
       fi
     fi
-    "$1_prompt_segment" "${0}_${(U)current_state}" "$2" "${vcs_states[$current_state]}" "$DEFAULT_COLOR" "$vcs_prompt" "$vcs_visual_identifier"
+    "$1_prompt_segment" "prompt_vcs_${(U)current_state}" "$2" "${vcs_states[$current_state]}" "$DEFAULT_COLOR" "$vcs_prompt" "$vcs_visual_identifier"
+  fi
+}
+prompt_vcs_light() {
+  git_find_repo_path
+  if [[ "$__git_repo_path" ]]; then
+    local branch_name="$(cat "$__git_repo_path/HEAD")"
+    local vcs_prompt="${branch_name#ref: refs/heads/}"
+    # pretend it's always clean since we can't possibly know
+    "$1_prompt_segment" "prompt_vcs_CLEAN" "$2" "blue" "$DEFAULT_COLOR" "$vcs_prompt" "$vcs_visual_identifier"
   fi
 }
 

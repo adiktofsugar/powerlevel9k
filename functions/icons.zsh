@@ -506,6 +506,12 @@ case $POWERLEVEL9K_MODE in
     )
   ;;
 esac
+if [[ -n $POWERLEVEL9K_DIR_CUSTOM_PATH_ICONS ]]; then
+  for dir_name icon_val in ${(kv)POWERLEVEL9K_DIR_CUSTOM_PATH_ICONS}; do
+    icon_name="${dir_name}_ICON"
+    icons[$icon_name]=$icon_val
+  done
+fi
 
 # Override the above icon settings with any user-defined variables.
 case $POWERLEVEL9K_MODE in
