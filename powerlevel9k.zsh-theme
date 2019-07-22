@@ -1699,15 +1699,26 @@ prompt_vcs_light() {
     if [[ -n "$POWERLEVEL9K_VCS_SHORTEN_LENGTH" ]] && [[ -n "$POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH" ]]; then
       set_default POWERLEVEL9K_VCS_SHORTEN_DELIMITER $'\U2026'
 
-      if [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ] && [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]; then
-        case "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" in
-          truncate_middle)
-            short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${short_branch_name: -$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
-          ;;
-          truncate_from_right)
-            short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}"
-          ;;
-        esac
+      if [[ "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" = "truncate_by_slash" ]]; then
+        local slash_arr=(${(s:/:)short_branch_name})
+        if [[ ${#slash_arr} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ]] && [[ ${#slash_arr} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]]; then
+          slash_arr=(${slash_arr:$(( ${#slash_arr} - POWERLEVEL9K_VCS_SHORTEN_LENGTH ))})
+          short_branch_name="${(j:/:)slash_arr}"
+        fi
+      else
+        if [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_MIN_LENGTH} ] && [ ${#short_branch_name} -gt ${POWERLEVEL9K_VCS_SHORTEN_LENGTH} ]; then
+          case "$POWERLEVEL9K_VCS_SHORTEN_STRATEGY" in
+            truncate_middle)
+              short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${short_branch_name: -$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
+            ;;
+            truncate_from_right)
+              short_branch_name="${short_branch_name:0:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}"
+            ;;
+            truncate_from_left)
+              short_branch_name="${POWERLEVEL9K_VCS_SHORTEN_DELIMITER}${short_branch_name:$POWERLEVEL9K_VCS_SHORTEN_LENGTH}"
+            ;;
+          esac
+        fi
       fi
     fi
     vcs_prompt+=("$(print_icon 'VCS_BRANCH_ICON')${short_branch_name}")
@@ -1718,7 +1729,7 @@ prompt_vcs_light() {
     (( __git_behind )) && vcs_prompt+=( " $(print_icon 'VCS_INCOMING_CHANGES_ICON')${__git_behind// /}" )
 
     # pretend it's always clean since we can't possibly know
-    "$1_prompt_segment" "prompt_vcs_CLEAN" "$2" "blue" "$DEFAULT_COLOR" "${(j::)vcs_prompt}" "$vcs_visual_identifier"
+    "$1_prompt_segment" "prompt_vcs_CLEAN" "$2" "${vcs_states[clean]}" "$DEFAULT_COLOR" "${(j::)vcs_prompt}" "$vcs_visual_identifier"
   fi
 }
 
